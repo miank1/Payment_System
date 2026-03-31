@@ -62,3 +62,14 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*model.Payment, er
 
 	return p, nil
 }
+
+func (r *Repository) UpdateStatus(ctx context.Context, id string, status string) error {
+	query := `
+		UPDATE payments
+		SET status = $1, updated_at = NOW()
+		WHERE id = $2
+	`
+
+	_, err := r.db.ExecContext(ctx, query, status, id)
+	return err
+}

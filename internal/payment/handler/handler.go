@@ -49,3 +49,15 @@ func (h *Handler) GetPayment(c *gin.Context) {
 
 	c.JSON(http.StatusOK, payment)
 }
+
+func (h *Handler) ProcessPayment(c *gin.Context) {
+	id := c.Param("id")
+
+	payment, err := h.service.ProcessPayment(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, payment)
+}

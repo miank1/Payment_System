@@ -31,6 +31,7 @@ func main() {
 
 	r.POST("/payments", h.CreatePayment)
 	r.GET("/payments/:id", h.GetPayment)
+	r.POST("/payments/:id/process", h.ProcessPayment)
 
 	// Start server
 	log.Println("🚀 Server running on :8080")
