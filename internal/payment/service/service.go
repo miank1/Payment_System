@@ -19,6 +19,18 @@ func New(repo *repository.Repository) *Service {
 }
 
 func (s *Service) CreatePayment(ctx context.Context, userID string, amount int64, idempotencyKey string) (*model.Payment, error) {
+
+	// Step 1: Check if payment already exists
+	existing, err := s.repo.GetByIdempotencyKey(ctx, idempotencyKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check idempotency: %w", err)
+	}
+
+	// Step 2: Already exists → return it
+	if existing != nil {
+		return existing, nil
+	}
+
 	p := &model.Payment{
 		ID:             uuid.NewString(),
 		UserID:         userID,

@@ -73,3 +73,33 @@ func (r *Repository) UpdateStatus(ctx context.Context, id string, status string)
 	_, err := r.db.ExecContext(ctx, query, status, id)
 	return err
 }
+
+func (r *Repository) GetByIdempotencyKey(ctx context.Context, key string) (*model.Payment, error) {
+	query := `
+		SELECT id, user_id, amount, status, idempotency_key, created_at, updated_at
+		FROM payments
+		WHERE idempotency_key = $1
+	`
+
+	p := &model.Payment{}
+
+	err := r.db.QueryRowContext(ctx, query, key).Scan(
+		&p.ID,
+		&p.UserID,
+		&p.Amount,
+		&p.Status,
+		&p.IdempotencyKey,
+		&p.CreatedAt,
+		&p.UpdatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}
