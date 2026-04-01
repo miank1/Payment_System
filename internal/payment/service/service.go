@@ -3,19 +3,22 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"payment-system/internal/payment/model"
 	"payment-system/internal/payment/repository"
+	"payment-system/pkg/queue"
 	"time"
 
 	"github.com/google/uuid"
 )
 
 type Service struct {
-	repo *repository.Repository
+	repo      *repository.Repository
+	publisher *queue.Publisher
 }
 
-func New(repo *repository.Repository) *Service {
-	return &Service{repo: repo}
+func New(repo *repository.Repository, publisher *queue.Publisher) *Service {
+	return &Service{repo: repo, publisher: publisher}
 }
 
 func (s *Service) CreatePayment(ctx context.Context, userID string, amount int64, idempotencyKey string) (*model.Payment, error) {
@@ -44,6 +47,13 @@ func (s *Service) CreatePayment(ctx context.Context, userID string, amount int64
 	if err := s.repo.Create(ctx, p); err != nil {
 		return nil, fmt.Errorf("failed to create payment: %w", err)
 	}
+
+	// Push to queue
+	if err := s.publisher.Publish(ctx, p.ID); err != nil {
+		return nil, fmt.Errorf("failed to publish payment: %w", err)
+	}
+
+	log.Printf("📬 Payment %s pushed to queue", p.ID)
 
 	return p, nil
 }

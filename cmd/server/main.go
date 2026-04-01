@@ -2,10 +2,12 @@ package main
 
 import (
 	"log"
+	"os"
 	"payment-system/internal/payment/handler"
 	"payment-system/internal/payment/repository"
 	"payment-system/internal/payment/service"
 	"payment-system/pkg/db"
+	"payment-system/pkg/queue"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -21,9 +23,20 @@ func main() {
 	database := db.Connect()
 	defer database.Close()
 
+	// Connect Queue
+	publisher, err := queue.NewPublisher(
+		os.Getenv("RABBITMQ_URL"),
+		os.Getenv("QUEUE_NAME"),
+	)
+
+	if err != nil {
+		log.Fatalf("failed to connect queue: %v", err)
+	}
+	defer publisher.Close()
+
 	// Wire layers
 	repo := repository.New(database)
-	svc := service.New(repo)
+	svc := service.New(repo, publisher)
 	h := handler.New(svc)
 
 	// Setup routes
