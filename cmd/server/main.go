@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"payment-system/internal/gateway"
 	"payment-system/internal/payment/handler"
 	"payment-system/internal/payment/repository"
 	"payment-system/internal/payment/service"
@@ -36,7 +37,8 @@ func main() {
 
 	// Wire layers
 	repo := repository.New(database)
-	svc := service.New(repo, publisher)
+	gw := gateway.NewMockGateway()
+	svc := service.New(repo, publisher, gw)
 	h := handler.New(svc)
 
 	// Setup routes

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"payment-system/internal/gateway"
 	"payment-system/internal/payment/repository"
 	"payment-system/internal/payment/service"
 	"payment-system/pkg/db"
@@ -38,7 +39,9 @@ func main() {
 		os.Getenv("RABBITMQ_URL"),
 		os.Getenv("QUEUE_NAME"),
 	)
-	svc := service.New(repo, publisher)
+
+	gw := gateway.NewMockGateway()
+	svc := service.New(repo, publisher, gw)
 
 	// Start consuming
 	msgs, err := consumer.Consume()

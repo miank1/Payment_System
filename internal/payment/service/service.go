@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"payment-system/internal/gateway"
 	"payment-system/internal/payment/model"
 	"payment-system/internal/payment/repository"
 	"payment-system/pkg/queue"
@@ -15,10 +16,11 @@ import (
 type Service struct {
 	repo      *repository.Repository
 	publisher *queue.Publisher
+	gateway   gateway.PaymentGateway // interface added
 }
 
-func New(repo *repository.Repository, publisher *queue.Publisher) *Service {
-	return &Service{repo: repo, publisher: publisher}
+func New(repo *repository.Repository, publisher *queue.Publisher, gw gateway.PaymentGateway) *Service {
+	return &Service{repo: repo, publisher: publisher, gateway: gw}
 }
 
 func (s *Service) CreatePayment(ctx context.Context, userID string, amount int64, idempotencyKey string) (*model.Payment, error) {
@@ -89,17 +91,16 @@ func (s *Service) ProcessPayment(ctx context.Context, id string) (*model.Payment
 		return nil, fmt.Errorf("failed to update status: %w", err)
 	}
 
-	// Step 4: Mock charge — always succeeds for now
-	chargeSuccess := true
-
-	// Step 5: Move to SUCCESS or FAILED
-	if chargeSuccess {
-		s.repo.UpdateStatus(ctx, id, model.StatusSuccess)
-		p.Status = model.StatusSuccess
-	} else {
+	// ← call gateway, check error
+	if err := s.gateway.Charge(p.Amount); err != nil {
 		s.repo.UpdateStatus(ctx, id, model.StatusFailed)
 		p.Status = model.StatusFailed
+		return p, nil
 	}
 
+	// ← no chargeSuccess variable needed
+	s.repo.UpdateStatus(ctx, id, model.StatusSuccess)
+	p.Status = model.StatusSuccess
 	return p, nil
+
 }
