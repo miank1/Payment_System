@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"payment-system/internal/gateway"
+	"payment-system/internal/ledger"
 	"payment-system/internal/payment/handler"
 	"payment-system/internal/payment/repository"
 	"payment-system/internal/payment/service"
@@ -36,9 +37,10 @@ func main() {
 	defer publisher.Close()
 
 	// Wire layers
+	ledgerRepo := ledger.NewRepository(database)
 	repo := repository.New(database)
 	gw := gateway.NewMockGateway()
-	svc := service.New(repo, publisher, gw)
+	svc := service.New(repo, publisher, gw, ledgerRepo)
 	h := handler.New(svc)
 
 	// Setup routes

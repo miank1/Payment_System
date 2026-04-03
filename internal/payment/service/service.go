@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"payment-system/internal/gateway"
+	"payment-system/internal/ledger"
 	"payment-system/internal/payment/model"
 	"payment-system/internal/payment/repository"
 	"payment-system/pkg/queue"
@@ -17,10 +18,16 @@ type Service struct {
 	repo      *repository.Repository
 	publisher *queue.Publisher
 	gateway   gateway.PaymentGateway // interface added
+	ledger    *ledger.Repository     // ← add this
 }
 
-func New(repo *repository.Repository, publisher *queue.Publisher, gw gateway.PaymentGateway) *Service {
-	return &Service{repo: repo, publisher: publisher, gateway: gw}
+func New(repo *repository.Repository, publisher *queue.Publisher, gw gateway.PaymentGateway, ledger *ledger.Repository) *Service {
+	return &Service{
+		repo:      repo,
+		publisher: publisher,
+		gateway:   gw,
+		ledger:    ledger,
+	}
 }
 
 func (s *Service) CreatePayment(ctx context.Context, userID string, amount int64, idempotencyKey string) (*model.Payment, error) {
@@ -101,6 +108,10 @@ func (s *Service) ProcessPayment(ctx context.Context, id string) (*model.Payment
 	// ← no chargeSuccess variable needed
 	s.repo.UpdateStatus(ctx, id, model.StatusSuccess)
 	p.Status = model.StatusSuccess
+
+	s.ledger.AddEntry(ctx, id, ledger.TypeDebit, p.Amount)
+	s.ledger.AddEntry(ctx, id, ledger.TypeCredit, p.Amount)
+	log.Printf("📒 Ledger entries written for payment %s", id)
 	return p, nil
 
 }

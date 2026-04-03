@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"payment-system/internal/gateway"
+	"payment-system/internal/ledger"
 	"payment-system/internal/payment/repository"
 	"payment-system/internal/payment/service"
 	"payment-system/pkg/db"
@@ -40,8 +41,9 @@ func main() {
 		os.Getenv("QUEUE_NAME"),
 	)
 
+	ledgerRepo := ledger.NewRepository(database)
 	gw := gateway.NewMockGateway()
-	svc := service.New(repo, publisher, gw)
+	svc := service.New(repo, publisher, gw, ledgerRepo)
 
 	// Start consuming
 	msgs, err := consumer.Consume()
