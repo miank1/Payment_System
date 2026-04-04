@@ -19,9 +19,20 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+
+	_ "payment-system/docs" // ← swagger docs
+
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 const maxRetries = 3
+
+// @title           Payment System API
+// @version         1.0
+// @description     A production grade payment system
+// @host            localhost:8080
+// @BasePath        /
 
 func main() {
 
@@ -77,6 +88,7 @@ func main() {
 	r.GET("/payments/:id", h.GetPayment)
 	r.POST("/payments/:id/process", h.ProcessPayment)
 	r.GET("/healthz", h.HealthCheck)
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// Graceful shutdown
 	quit := make(chan os.Signal, 1)

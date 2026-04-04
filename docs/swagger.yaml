@@ -1,0 +1,141 @@
+basePath: /
+definitions:
+  handler.CreatePaymentRequest:
+    properties:
+      amount:
+        type: integer
+      idempotency_key:
+        type: string
+      user_id:
+        type: string
+    required:
+    - amount
+    - idempotency_key
+    - user_id
+    type: object
+  model.Payment:
+    properties:
+      amount:
+        type: integer
+      created_at:
+        type: string
+      id:
+        type: string
+      idempotency_key:
+        type: string
+      retry_count:
+        type: integer
+      status:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: A production grade payment system
+  title: Payment System API
+  version: "1.0"
+paths:
+  /healthz:
+    get:
+      description: Check if system is healthy
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check
+      tags:
+      - health
+  /payments:
+    post:
+      consumes:
+      - application/json
+      description: Create a new payment
+      parameters:
+      - description: Payment Request
+        in: body
+        name: payment
+        required: true
+        schema:
+          $ref: '#/definitions/handler.CreatePaymentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Payment'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create a payment
+      tags:
+      - payments
+  /payments/{id}:
+    get:
+      description: Get payment by ID
+      parameters:
+      - description: Payment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Payment'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get a payment
+      tags:
+      - payments
+  /payments/{id}/process:
+    post:
+      description: Process payment through gateway
+      parameters:
+      - description: Payment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Payment'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Process a payment
+      tags:
+      - payments
+swagger: "2.0"
