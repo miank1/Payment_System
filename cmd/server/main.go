@@ -5,6 +5,7 @@ import (
 	"os"
 	"payment-system/internal/gateway"
 	"payment-system/internal/ledger"
+	"payment-system/internal/notifier"
 	"payment-system/internal/payment/handler"
 	"payment-system/internal/payment/repository"
 	"payment-system/internal/payment/service"
@@ -40,7 +41,8 @@ func main() {
 	ledgerRepo := ledger.NewRepository(database)
 	repo := repository.New(database)
 	gw := gateway.NewMockGateway()
-	svc := service.New(repo, publisher, gw, ledgerRepo)
+	ntf := notifier.NewMockNotifier()
+	svc := service.New(repo, publisher, gw, ledgerRepo, ntf)
 	h := handler.New(svc)
 
 	// Setup routes

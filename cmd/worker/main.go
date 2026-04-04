@@ -6,6 +6,7 @@ import (
 	"os"
 	"payment-system/internal/gateway"
 	"payment-system/internal/ledger"
+	"payment-system/internal/notifier"
 	"payment-system/internal/payment/repository"
 	"payment-system/internal/payment/service"
 	"payment-system/pkg/db"
@@ -35,15 +36,15 @@ func main() {
 	defer consumer.Close()
 
 	// Wire layers
-	repo := repository.New(database)
 	publisher, _ := queue.NewPublisher(
 		os.Getenv("RABBITMQ_URL"),
 		os.Getenv("QUEUE_NAME"),
 	)
-
 	ledgerRepo := ledger.NewRepository(database)
 	gw := gateway.NewMockGateway()
-	svc := service.New(repo, publisher, gw, ledgerRepo)
+	repo := repository.New(database)
+	ntf := notifier.NewMockNotifier()
+	svc := service.New(repo, publisher, gw, ledgerRepo, ntf)
 
 	// Start consuming
 	msgs, err := consumer.Consume()
@@ -60,7 +61,7 @@ func main() {
 		_, err := svc.ProcessPayment(context.Background(), paymentID)
 		if err != nil {
 			log.Printf("❌ Failed to process payment %s: %v", paymentID, err)
-			msg.Nack(false, true) // requeue
+			msg.Nack(false, false) // ← requeue = false, drop it
 			continue
 		}
 

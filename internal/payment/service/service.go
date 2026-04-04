@@ -6,6 +6,7 @@ import (
 	"log"
 	"payment-system/internal/gateway"
 	"payment-system/internal/ledger"
+	"payment-system/internal/notifier"
 	"payment-system/internal/payment/model"
 	"payment-system/internal/payment/repository"
 	"payment-system/pkg/queue"
@@ -17,28 +18,33 @@ import (
 type Service struct {
 	repo      *repository.Repository
 	publisher *queue.Publisher
-	gateway   gateway.PaymentGateway // interface added
-	ledger    *ledger.Repository     // ← add this
+	gateway   gateway.PaymentGateway
+	ledger    *ledger.Repository
+	notifier  notifier.Notifier
 }
 
-func New(repo *repository.Repository, publisher *queue.Publisher, gw gateway.PaymentGateway, ledger *ledger.Repository) *Service {
+// ← notifier added to New()
+func New(
+	repo *repository.Repository,
+	publisher *queue.Publisher,
+	gw gateway.PaymentGateway,
+	ledger *ledger.Repository,
+	notifier notifier.Notifier,
+) *Service {
 	return &Service{
 		repo:      repo,
 		publisher: publisher,
 		gateway:   gw,
 		ledger:    ledger,
+		notifier:  notifier,
 	}
 }
 
 func (s *Service) CreatePayment(ctx context.Context, userID string, amount int64, idempotencyKey string) (*model.Payment, error) {
-
-	// Step 1: Check if payment already exists
 	existing, err := s.repo.GetByIdempotencyKey(ctx, idempotencyKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check idempotency: %w", err)
 	}
-
-	// Step 2: Already exists → return it
 	if existing != nil {
 		return existing, nil
 	}
@@ -57,13 +63,11 @@ func (s *Service) CreatePayment(ctx context.Context, userID string, amount int64
 		return nil, fmt.Errorf("failed to create payment: %w", err)
 	}
 
-	// Push to queue
 	if err := s.publisher.Publish(ctx, p.ID); err != nil {
 		return nil, fmt.Errorf("failed to publish payment: %w", err)
 	}
 
 	log.Printf("📬 Payment %s pushed to queue", p.ID)
-
 	return p, nil
 }
 
@@ -88,7 +92,7 @@ func (s *Service) ProcessPayment(ctx context.Context, id string) (*model.Payment
 		return nil, fmt.Errorf("payment not found")
 	}
 
-	// Step 2: Only CREATED payments can be processed
+	// Step 2: Only CREATED can be processed
 	if p.Status != model.StatusCreated {
 		return nil, fmt.Errorf("payment is already %s", p.Status)
 	}
@@ -98,20 +102,30 @@ func (s *Service) ProcessPayment(ctx context.Context, id string) (*model.Payment
 		return nil, fmt.Errorf("failed to update status: %w", err)
 	}
 
-	// ← call gateway, check error
+	// Step 4: Charge via gateway
 	if err := s.gateway.Charge(p.Amount); err != nil {
 		s.repo.UpdateStatus(ctx, id, model.StatusFailed)
 		p.Status = model.StatusFailed
+
+		// ← notify on failure too
+		s.notifier.Send(id, model.StatusFailed, p.Amount)
+		log.Printf("🔔 Notification sent → FAILED for payment %s", id)
+
 		return p, nil
 	}
 
-	// ← no chargeSuccess variable needed
+	// Step 5: Move to SUCCESS
 	s.repo.UpdateStatus(ctx, id, model.StatusSuccess)
 	p.Status = model.StatusSuccess
 
+	// Step 6: Write ledger
 	s.ledger.AddEntry(ctx, id, ledger.TypeDebit, p.Amount)
 	s.ledger.AddEntry(ctx, id, ledger.TypeCredit, p.Amount)
 	log.Printf("📒 Ledger entries written for payment %s", id)
-	return p, nil
 
+	// Step 7: Notify success
+	s.notifier.Send(id, model.StatusSuccess, p.Amount)
+	log.Printf("🔔 Notification sent → SUCCESS for payment %s", id)
+
+	return p, nil
 }
