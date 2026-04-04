@@ -19,7 +19,6 @@ func (r *Repository) Create(ctx context.Context, p *model.Payment) error {
 		INSERT INTO payments (id, user_id, amount, status, idempotency_key, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
-
 	_, err := r.db.ExecContext(ctx, query,
 		p.ID,
 		p.UserID,
@@ -29,7 +28,6 @@ func (r *Repository) Create(ctx context.Context, p *model.Payment) error {
 		p.CreatedAt,
 		p.UpdatedAt,
 	)
-
 	return err
 }
 
@@ -39,9 +37,7 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*model.Payment, er
 		FROM payments
 		WHERE id = $1
 	`
-
 	p := &model.Payment{}
-
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&p.ID,
 		&p.UserID,
@@ -51,27 +47,13 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*model.Payment, er
 		&p.CreatedAt,
 		&p.UpdatedAt,
 	)
-
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
-
 	if err != nil {
 		return nil, err
 	}
-
 	return p, nil
-}
-
-func (r *Repository) UpdateStatus(ctx context.Context, id string, status string) error {
-	query := `
-		UPDATE payments
-		SET status = $1, updated_at = NOW()
-		WHERE id = $2
-	`
-
-	_, err := r.db.ExecContext(ctx, query, status, id)
-	return err
 }
 
 func (r *Repository) GetByIdempotencyKey(ctx context.Context, key string) (*model.Payment, error) {
@@ -80,9 +62,7 @@ func (r *Repository) GetByIdempotencyKey(ctx context.Context, key string) (*mode
 		FROM payments
 		WHERE idempotency_key = $1
 	`
-
 	p := &model.Payment{}
-
 	err := r.db.QueryRowContext(ctx, query, key).Scan(
 		&p.ID,
 		&p.UserID,
@@ -92,14 +72,63 @@ func (r *Repository) GetByIdempotencyKey(ctx context.Context, key string) (*mode
 		&p.CreatedAt,
 		&p.UpdatedAt,
 	)
-
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
-
 	if err != nil {
 		return nil, err
 	}
-
 	return p, nil
+}
+
+func (r *Repository) UpdateStatus(ctx context.Context, id string, status string) error {
+	query := `
+		UPDATE payments
+		SET status = $1, updated_at = NOW()
+		WHERE id = $2
+	`
+	_, err := r.db.ExecContext(ctx, query, status, id)
+	return err
+}
+
+// ← new: begin transaction
+func (r *Repository) BeginTx(ctx context.Context) (*sql.Tx, error) {
+	return r.db.BeginTx(ctx, nil)
+}
+
+// ← new: lock row for update inside transaction
+func (r *Repository) GetByIDForUpdate(ctx context.Context, tx *sql.Tx, id string) (*model.Payment, error) {
+	query := `
+		SELECT id, user_id, amount, status, idempotency_key, created_at, updated_at
+		FROM payments
+		WHERE id = $1
+		FOR UPDATE
+	`
+	p := &model.Payment{}
+	err := tx.QueryRowContext(ctx, query, id).Scan(
+		&p.ID,
+		&p.UserID,
+		&p.Amount,
+		&p.Status,
+		&p.IdempotencyKey,
+		&p.CreatedAt,
+		&p.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func (r *Repository) UpdateStatusTx(ctx context.Context, tx *sql.Tx, id string, status string) error {
+	query := `
+		UPDATE payments
+		SET status = $1, updated_at = NOW()
+		WHERE id = $2
+	`
+	_, err := tx.ExecContext(ctx, query, status, id)
+	return err
 }

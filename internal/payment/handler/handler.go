@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"payment-system/internal/payment/service"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -60,4 +61,11 @@ func (h *Handler) ProcessPayment(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, payment)
+}
+
+func (h *Handler) HealthCheck(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"status": "ok",
+		"time":   time.Now(),
+	})
 }

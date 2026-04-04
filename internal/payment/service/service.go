@@ -9,10 +9,12 @@ import (
 	"payment-system/internal/notifier"
 	"payment-system/internal/payment/model"
 	"payment-system/internal/payment/repository"
+	"payment-system/pkg/logger"
 	"payment-system/pkg/queue"
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 type Service struct {
@@ -67,7 +69,10 @@ func (s *Service) CreatePayment(ctx context.Context, userID string, amount int64
 		return nil, fmt.Errorf("failed to publish payment: %w", err)
 	}
 
-	log.Printf("📬 Payment %s pushed to queue", p.ID)
+	logger.Log.Info("payment pushed to queue",
+		zap.String("payment_id", p.ID),
+		zap.Int64("amount", amount),
+	)
 	return p, nil
 }
 
@@ -83,49 +88,68 @@ func (s *Service) GetPayment(ctx context.Context, id string) (*model.Payment, er
 }
 
 func (s *Service) ProcessPayment(ctx context.Context, id string) (*model.Payment, error) {
-	// Step 1: Fetch payment
-	p, err := s.repo.GetByID(ctx, id)
+
+	// Step 1: Begin transaction
+	tx, err := s.repo.BeginTx(ctx)
 	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	// Step 2: Lock row with SELECT FOR UPDATE
+	p, err := s.repo.GetByIDForUpdate(ctx, tx, id)
+	if err != nil {
+		tx.Rollback()
 		return nil, fmt.Errorf("failed to fetch payment: %w", err)
 	}
 	if p == nil {
+		tx.Rollback()
 		return nil, fmt.Errorf("payment not found")
 	}
 
-	// Step 2: Only CREATED can be processed
+	// Step 3: Already processed → skip
 	if p.Status != model.StatusCreated {
-		return nil, fmt.Errorf("payment is already %s", p.Status)
-	}
-
-	// Step 3: Move to PROCESSING
-	if err := s.repo.UpdateStatus(ctx, id, model.StatusProcessing); err != nil {
-		return nil, fmt.Errorf("failed to update status: %w", err)
-	}
-
-	// Step 4: Charge via gateway
-	if err := s.gateway.Charge(p.Amount); err != nil {
-		s.repo.UpdateStatus(ctx, id, model.StatusFailed)
-		p.Status = model.StatusFailed
-
-		// ← notify on failure too
-		s.notifier.Send(id, model.StatusFailed, p.Amount)
-		log.Printf("🔔 Notification sent → FAILED for payment %s", id)
-
+		tx.Rollback()
+		log.Printf("⚠️  Payment %s already %s, skipping", id, p.Status)
 		return p, nil
 	}
 
-	// Step 5: Move to SUCCESS
+	// Step 4: Move to PROCESSING inside transaction
+	if err := s.repo.UpdateStatusTx(ctx, tx, id, model.StatusProcessing); err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to update status: %w", err)
+	}
+
+	// Step 5: Commit PROCESSING status
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// Step 6: Charge via gateway
+	if err := s.gateway.Charge(p.Amount); err != nil {
+		s.repo.UpdateStatus(ctx, id, model.StatusFailed)
+		p.Status = model.StatusFailed
+		s.notifier.Send(id, model.StatusFailed, p.Amount)
+		log.Printf("🔔 Notification sent → FAILED for payment %s", id)
+		return p, nil
+	}
+
+	// Step 7: Move to SUCCESS
 	s.repo.UpdateStatus(ctx, id, model.StatusSuccess)
 	p.Status = model.StatusSuccess
 
-	// Step 6: Write ledger
+	// Step 8: Write ledger
 	s.ledger.AddEntry(ctx, id, ledger.TypeDebit, p.Amount)
 	s.ledger.AddEntry(ctx, id, ledger.TypeCredit, p.Amount)
-	log.Printf("📒 Ledger entries written for payment %s", id)
+	logger.Log.Info("ledger entries written",
+		zap.String("payment_id", id),
+	)
 
-	// Step 7: Notify success
+	// Step 9: Notify
 	s.notifier.Send(id, model.StatusSuccess, p.Amount)
-	log.Printf("🔔 Notification sent → SUCCESS for payment %s", id)
+	logger.Log.Info("notification sent",
+		zap.String("payment_id", id),
+		zap.String("status", model.StatusSuccess),
+	)
 
 	return p, nil
 }

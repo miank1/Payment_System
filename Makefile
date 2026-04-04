@@ -10,6 +10,9 @@ tidy:
 build:
 	go build -o bin/server.exe cmd/server/main.go
 
+server:
+	go run cmd/server/main.go
+
 test:
 	curl -X POST http://localhost:8080/payments \
 		-H "Content-Type: application/json" \

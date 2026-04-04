@@ -12,6 +12,7 @@ import (
 	"payment-system/internal/payment/repository"
 	"payment-system/internal/payment/service"
 	"payment-system/pkg/db"
+	"payment-system/pkg/logger"
 	"payment-system/pkg/queue"
 	"syscall"
 	"time"
@@ -23,6 +24,11 @@ import (
 const maxRetries = 3
 
 func main() {
+
+	// Init logger
+	logger.Init()
+	defer logger.Sync()
+
 	// Load .env
 	if err := godotenv.Load(); err != nil {
 		log.Fatal("Error loading .env file")
@@ -70,6 +76,7 @@ func main() {
 	r.POST("/payments", h.CreatePayment)
 	r.GET("/payments/:id", h.GetPayment)
 	r.POST("/payments/:id/process", h.ProcessPayment)
+	r.GET("/healthz", h.HealthCheck)
 
 	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
