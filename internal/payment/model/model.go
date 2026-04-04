@@ -8,6 +8,7 @@ type Payment struct {
 	Amount         int64     `json:"amount"`
 	Status         string    `json:"status"`
 	IdempotencyKey string    `json:"idempotency_key"`
+	RetryCount     int       `json:"retry_count"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 }

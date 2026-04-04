@@ -11,9 +11,12 @@ import (
 	"payment-system/internal/payment/service"
 	"payment-system/pkg/db"
 	"payment-system/pkg/queue"
+	"time"
 
 	"github.com/joho/godotenv"
 )
+
+const maxRetries = 3
 
 func main() {
 	// Load .env
@@ -58,14 +61,40 @@ func main() {
 		paymentID := string(msg.Body)
 		log.Printf("⚙️  Processing payment: %s", paymentID)
 
-		_, err := svc.ProcessPayment(context.Background(), paymentID)
-		if err != nil {
-			log.Printf("❌ Failed to process payment %s: %v", paymentID, err)
-			msg.Nack(false, false) // ← requeue = false, drop it
-			continue
+		var lastErr error
+		success := false
+
+		// Retry loop
+		for attempt := 1; attempt <= maxRetries; attempt++ {
+			_, err := svc.ProcessPayment(context.Background(), paymentID)
+			if err == nil {
+				success = true
+				break
+			}
+
+			lastErr = err
+			log.Printf("⚠️  Attempt %d failed for payment %s: %v", attempt, paymentID, err)
+
+			if attempt < maxRetries {
+				log.Printf("🔄 Retrying in 2 seconds...")
+				time.Sleep(2 * time.Second)
+			}
 		}
 
-		log.Printf("✅ Payment %s processed successfully", paymentID)
-		msg.Ack(false)
+		if success {
+			log.Printf("✅ Payment %s processed successfully", paymentID)
+			msg.Ack(false)
+		} else {
+			log.Printf("💀 Payment %s failed after %d attempts: %v", paymentID, maxRetries, lastErr)
+
+			// Push to DLQ
+			if err := publisher.PublishToDLQ(context.Background(), paymentID); err != nil {
+				log.Printf("❌ Failed to push to DLQ: %v", err)
+			} else {
+				log.Printf("📨 Payment %s sent to DLQ", paymentID)
+			}
+
+			msg.Nack(false, false) // drop from main queue
+		}
 	}
 }

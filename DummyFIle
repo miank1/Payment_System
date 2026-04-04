@@ -1,0 +1,7 @@
+curl -X POST http://localhost:8080/payments \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "user_123",
+    "amount": 9000,
+    "idempotency_key": "key_090"
+  }'

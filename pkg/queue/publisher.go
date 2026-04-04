@@ -24,7 +24,6 @@ func NewPublisher(url string, queueName string) (*Publisher, error) {
 		return nil, err
 	}
 
-	// Declare queue
 	_, err = ch.QueueDeclare(
 		queueName, // name
 		true,      // durable
@@ -56,6 +55,36 @@ func (p *Publisher) Publish(ctx context.Context, paymentID string) error {
 			ContentType:  "text/plain",
 			Body:         []byte(paymentID),
 			DeliveryMode: amqp.Persistent, // survive RabbitMQ restart
+		},
+	)
+}
+
+// ← new DLQ publish function
+func (p *Publisher) PublishToDLQ(ctx context.Context, paymentID string) error {
+	dlqName := p.queue + "_dead"
+
+	// declare DLQ
+	_, err := p.channel.QueueDeclare(
+		dlqName,
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	return p.channel.PublishWithContext(ctx,
+		"",
+		dlqName,
+		false,
+		false,
+		amqp.Publishing{
+			ContentType:  "text/plain",
+			Body:         []byte(paymentID),
+			DeliveryMode: amqp.Persistent,
 		},
 	)
 }
