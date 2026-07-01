@@ -16,10 +16,17 @@ import (
 	"github.com/miank1/ecommerce_backend/pkg/middleware"
 )
 
+func LoadEnv() {
+	_ = godotenv.Load(".env")
+	_ = godotenv.Load("../.env")
+}
+
 func main() {
 
 	logger.Init()
 	defer logger.Sync()
+
+	LoadEnv()
 
 	// Load env
 	if err := godotenv.Load(".env"); err != nil {
