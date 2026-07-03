@@ -1,19 +1,42 @@
-.PHONY: run tidy build test
+APP_NAME=payment-service
+AIR=$(HOME)/go/bin/air
 
-# Start everything in one terminal
+.PHONY: dev run build start test tidy fmt clean docker
+
+# Development (Live Reload)
+dev:
+	$(AIR)
+
+# Run without Air
 run:
-	go run cmd/main.go
+	go run ./cmd/main.go
 
+# Build binary
+build:
+	mkdir -p bin
+	go build -o bin/$(APP_NAME) ./cmd/main.go
+
+# Run compiled binary
+start: build
+	./bin/$(APP_NAME)
+
+# Run tests
+test:
+	go test ./...
+
+# Download & clean dependencies
 tidy:
 	go mod tidy
 
-build:
-	go build -o bin/server.exe cmd/server/main.go
+# Format Go code
+fmt:
+	go fmt ./...
 
-server:
-	go run cmd/server/main.go
+# Clean generated files
+clean:
+	rm -rf bin
+	rm -rf tmp
 
-test:
-	curl -X POST http://localhost:8080/payments \
-		-H "Content-Type: application/json" \
-		-d "{\"user_id\": \"user_123\", \"amount\": 9000, \"idempotency_key\": \"key_$(shell date +%s)\"}"
+# Build Docker image
+docker:
+	docker build -t $(APP_NAME) .
