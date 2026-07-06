@@ -28,11 +28,6 @@ func main() {
 
 	LoadEnv()
 
-	// Load env
-	if err := godotenv.Load(".env"); err != nil {
-		log.Println("⚠️ No .env file found")
-	}
-
 	dsn := os.Getenv("DATABASE_DSN")
 	if dsn == "" {
 		log.Fatal("❌ DATABASE_DSN not configured")
