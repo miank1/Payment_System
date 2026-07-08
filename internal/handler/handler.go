@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 	"payment_service/internal/service"
 
@@ -27,18 +28,24 @@ type UpdatePaymentStatusRequest struct {
 	Status string `json:"status" binding:"required"`
 }
 
-// POST /api/v1/payments
 func (h *PaymentHandler) CreatePayment(c *gin.Context) {
-
 	var req CreatePaymentRequest
 
+	log.Println("========== CreatePayment ==========")
+
+	// Bind request
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Println("❌ JSON Bind Error:", err)
+
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
 
+	log.Printf("✅ Request Received: %+v\n", req)
+
+	// Call service
 	payment, err := h.Svc.CreatePayment(
 		req.OrderID,
 		req.UserID,
@@ -46,11 +53,15 @@ func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 	)
 
 	if err != nil {
+		log.Println("❌ Service Error:", err)
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
+
+	log.Printf("✅ Payment Created: %+v\n", payment)
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "payment created",
@@ -58,7 +69,7 @@ func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 	})
 }
 
-// GET /api/v1/payments/:id
+// GET
 func (h *PaymentHandler) GetPayment(c *gin.Context) {
 
 	id := c.Param("id")

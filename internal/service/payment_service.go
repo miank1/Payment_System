@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"log"
 	models "payment_service/internal/model"
 	"payment_service/internal/repository"
 
@@ -52,6 +53,8 @@ func (s *paymentService) CreatePayment(orderID, userID string, amount float64) (
 	if err := s.repo.Create(payment); err != nil {
 		return nil, err
 	}
+
+	log.Println("payment details ***********************", payment)
 
 	return payment, nil
 }

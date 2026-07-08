@@ -13,7 +13,6 @@ import (
 	"github.com/miank1/ecommerce_backend/pkg/config"
 	"github.com/miank1/ecommerce_backend/pkg/db"
 	"github.com/miank1/ecommerce_backend/pkg/logger"
-	"github.com/miank1/ecommerce_backend/pkg/middleware"
 )
 
 func LoadEnv() {
@@ -50,7 +49,7 @@ func main() {
 	paymentHandler := handler.NewPaymentHandler(paymentService)
 
 	// Gin
-	gin.SetMode(gin.ReleaseMode)
+	gin.SetMode(gin.DebugMode)
 
 	r := gin.Default()
 
@@ -62,11 +61,9 @@ func main() {
 	})
 
 	api := r.Group("/payments")
-
-	api.Use(middleware.JWTAuth())
 	{
-		api.GET("/:id", paymentHandler.GetPayment)
 		api.POST("", paymentHandler.CreatePayment)
+		api.GET("/:id", paymentHandler.GetPayment)
 		api.PATCH("/:id/status", paymentHandler.UpdatePaymentStatus)
 	}
 
